@@ -137,10 +137,15 @@ def main():
     ua: UserAgent = UserAgent()
     is_homepage: bool = False
 
+    bot = None
+    chat_id = None
+
     with open(os.path.join(BASE_DIR, 'bot_token.dat'), 'r+') as f_read:
         token = f_read.readline()
         bot = telegram.Bot(token=token)
         chat_id = bot.getUpdates()[-1].message.chat.id
+        f_read.close()
+        
     # infinite loop
     while True:
         print(get_time())
