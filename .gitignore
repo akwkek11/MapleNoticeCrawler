@@ -1,0 +1,6 @@
+## vscode folder ##
+.vscode/*
+
+## MUST NOT BE UPLOADED##
+*.patch
+bot_token.dat
