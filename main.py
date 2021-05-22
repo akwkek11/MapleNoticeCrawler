@@ -143,7 +143,12 @@ def main():
     with open(os.path.join(BASE_DIR, 'bot_token.dat'), 'r+') as f_read:
         token = f_read.readline()
         bot = telegram.Bot(token=token)
-        chat_id = bot.getUpdates()[-1].message.chat.id
+
+        try:
+            chat_id = bot.getUpdates()[-1].message.chat.id
+        except IndexError:
+            chat_id = 0
+            
         f_read.close()
         
     # infinite loop
