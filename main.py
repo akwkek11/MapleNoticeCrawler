@@ -10,6 +10,7 @@ import os
 import requests
 import shutil
 import telegram
+import asyncio
 
 # String concatenation without '+' for the performance issue
 def concat_all(*strings: list) -> str:
@@ -40,46 +41,61 @@ def get_time() -> str:
 def randomize_header(ua: UserAgent) -> UserAgent:
     return {'User-Agent' : ua.random}
 
-def main_update(bot, chat_id, BASE_DIR: str, target: str, database_name: str, push_name: str, user_agent: UserAgent, is_homepage: bool) -> None:
+async def main_update(bot, chat_id, BASE_DIR: str, target: str, database_name: str, push_name: str, user_agent: UserAgent, is_homepage: bool) -> None:
     FILE_NAME = database_name
     MAIN_URL = 'https://maplestory.nexon.com'
 
     url = concat_all(MAIN_URL, target)
 
     headers = randomize_header(user_agent)
+    
+    try:
+        req = requests.get(url, headers=headers)
+        req.encoding = 'utf-8'
 
-    req = requests.get(url, headers=headers)
-    req.encoding = 'utf-8'
+        posts = crawling_main(req) if is_homepage else crawling(req)
+        latest = posts[0].text.strip()
+        latest_link = posts[0].get('href')
 
-    posts = crawling_main(req) if is_homepage else crawling(req)
-    latest = posts[0].text.strip()
-    latest_link = posts[0].get('href')
+        # Read previous notice ( latest )
+        with open(os.path.join(BASE_DIR, FILE_NAME), 'r+', encoding='utf-8') as f_read:
+            before: list = f_read.read().splitlines()
 
-    # Read previous notice ( latest )
-    with open(os.path.join(BASE_DIR, FILE_NAME), 'r+') as f_read:
-        before = f_read.readline()
-        
-        print(concat_all('이전 ', push_name, ' 공지 : ', before, '\n최근 ', push_name, ' 공지 : ', latest))
-        # Push text to Telegram
-        if before != latest and before != '':
-            now = get_time()
-            PUSH_TEXT = ' 공지가 올라왔어요!\n'
-            message = concat_all(push_name, PUSH_TEXT, now, '\n', '제목 : ', latest,'\n', MAIN_URL, latest_link)
+            '''
+            # for Debugging
+            # print(concat_all('이전 ', push_name, ' 공지 : ', before, '\n최근 ', push_name, ' 공지 : ', latest))
+            # print(before)
+            '''
+
+            is_new: bool = True
+            for string in before:
+                if string == latest and before != '':
+                    is_new = False
+                    break
             
-            bot.sendMessage(chat_id=chat_id, text=message)
+            # Push text to Telegram
+            if is_new:
+                now = get_time()
+                PUSH_TEXT = ' 공지가 올라왔어요!\n'
+                message = concat_all(push_name, PUSH_TEXT, now, '\n', '제목 : ', latest,'\n', MAIN_URL, latest_link)
+                
+                bot.sendMessage(chat_id=chat_id, text=message)
+            f_read.close()
 
-        '''
-        # for Debugging
-        else:
-            bot.sendMessage(chat_id=chat_id, text='Hello, World!')
-        '''
+            '''
+            # for Debugging
+            else:
+                bot.sendMessage(chat_id=chat_id, text='Hello, World!')
+            '''
 
-        f_read.close()
-
-    # Modify to latest notice
-    with open(os.path.join(BASE_DIR, FILE_NAME), 'w+') as f_write:
-        f_write.write(latest)
-        f_write.close()
+        # Modify to latest notice
+        if is_new:
+            with open(os.path.join(BASE_DIR, FILE_NAME), 'a') as f_write:
+                f_write.write(concat_all('\n', latest))
+                f_write.close()
+    
+    except requests.exceptions.ConnectionError as e:
+        print("main_update error : Connection refused.")
 
 def test_client_download(bot, chat_id, BASE_DIR: str, user_agent: UserAgent) -> None:
     # test_client_version.dat must be set to release version code. ex) 01097
@@ -129,7 +145,7 @@ def test_client_download(bot, chat_id, BASE_DIR: str, user_agent: UserAgent) -> 
     except requests.exceptions.ConnectionError as e:
         print("test_client_download error : Connection refused.")
 
-def main():
+async def main():
     BASE_DIR: str = os.path.dirname(os.path.abspath(__file__))
     TARGET: list = [['/Home/Main', 'main_homepage_latest.dat', '본 서버 홈페이지'],
                     ['/News/Notice/Inspection', 'main_inspection_latest.dat', '본 서버 점검관련'], 
@@ -148,19 +164,21 @@ def main():
             chat_id = bot.getUpdates()[-1].message.chat.id
         except IndexError:
             chat_id = 0
-            
+
         f_read.close()
-        
+
     # infinite loop
     while True:
         print(get_time())
-        for i in range(len(TARGET)):
-            is_homepage = True if i == 0 else False
-            main_update(bot, chat_id, BASE_DIR, TARGET[i][0], TARGET[i][1], TARGET[i][2], ua, is_homepage)
+        
+        await asyncio.wait([main_update(bot, chat_id, BASE_DIR, TARGET[0][0], TARGET[0][1], TARGET[0][2], ua, True),
+                            main_update(bot, chat_id, BASE_DIR, TARGET[1][0], TARGET[1][1], TARGET[1][2], ua, False),
+                            main_update(bot, chat_id, BASE_DIR, TARGET[2][0], TARGET[2][1], TARGET[2][2], ua, False)])
+        
         test_client_download(bot, chat_id, BASE_DIR, ua)
 
         # iterate n seconds
-        sleep(5)
+        await asyncio.sleep(3)
 
 if __name__ == '__main__':
-    main()
+    asyncio.run(main())
