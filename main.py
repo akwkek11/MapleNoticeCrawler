@@ -9,6 +9,7 @@ import datetime
 import os
 import requests
 import shutil
+import time
 import telegram
 import asyncio
 
@@ -71,7 +72,6 @@ async def main_update(bot, chat_id, BASE_DIR: str, target: str, database_name: s
             '''
             # for Debugging
             # print(concat_all('이전 ', push_name, ' 공지 : ', before, '\n최근 ', push_name, ' 공지 : ', latest))
-            # print(before)
             '''
 
             is_new: bool = True
@@ -165,11 +165,10 @@ async def main():
                     ['/News/Notice/Inspection', 'main_inspection_latest.dat', '본 서버 점검관련'], 
                     ['/Testworld/Totalnotice', 'test_notice_latest.dat', '테스트서버']]
     ua: UserAgent = UserAgent()
-    is_homepage: bool = False
 
     bot = None
     chat_id = None
-
+    
     with open(os.path.join(BASE_DIR, 'bot_token.dat'), 'r+') as f_read:
         token = f_read.readline()
         bot = telegram.Bot(token=token)
@@ -185,9 +184,25 @@ async def main():
     while True:
         print(get_time())
         
+        # start = time.time()
+
+        '''
+        will be deprecated on python 3.11.x
+
         await asyncio.wait([main_update(bot, chat_id, BASE_DIR, TARGET[0][0], TARGET[0][1], TARGET[0][2], ua, True),
                             main_update(bot, chat_id, BASE_DIR, TARGET[1][0], TARGET[1][1], TARGET[1][2], ua, False),
                             main_update(bot, chat_id, BASE_DIR, TARGET[2][0], TARGET[2][1], TARGET[2][2], ua, False)])
+        '''
+
+        main_update1 = asyncio.create_task(main_update(bot, chat_id, BASE_DIR, TARGET[0][0], TARGET[0][1], TARGET[0][2], ua, True))
+        main_update2 = asyncio.create_task(main_update(bot, chat_id, BASE_DIR, TARGET[1][0], TARGET[1][1], TARGET[1][2], ua, False))
+        main_update3 = asyncio.create_task(main_update(bot, chat_id, BASE_DIR, TARGET[2][0], TARGET[2][1], TARGET[2][2], ua, False))
+        await main_update1
+        await main_update2
+        await main_update3
+
+        # end = time.time()
+        # print(f'time taken: {end - start}')
         
         test_client_download(bot, chat_id, BASE_DIR, ua)
 
