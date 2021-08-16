@@ -57,9 +57,16 @@ async def main_update(bot, chat_id, BASE_DIR: str, target: str, database_name: s
         latest = posts[0].text.strip()
         latest_link = posts[0].get('href')
 
+        latest_string: list = None
+
         # Read previous notice ( latest )
+        too_long: bool = False
+
         with open(os.path.join(BASE_DIR, FILE_NAME), 'r+', encoding='utf-8') as f_read:
             before: list = f_read.read().splitlines()
+            if len(before) >= 20:
+                too_long = True
+                latest_string = before[len(before)-2:]
 
             '''
             # for Debugging
@@ -90,8 +97,15 @@ async def main_update(bot, chat_id, BASE_DIR: str, target: str, database_name: s
 
         # Modify to latest notice
         if is_new:
-            with open(os.path.join(BASE_DIR, FILE_NAME), 'a') as f_write:
+            with open(os.path.join(BASE_DIR, FILE_NAME), 'at', encoding='utf-8') as f_write:
                 f_write.write(concat_all('\n', latest))
+                f_write.close()
+                latest_string.append(latest)
+        
+        # Modify database
+        if too_long:
+            with open(os.path.join(BASE_DIR, FILE_NAME), 'wt', encoding='utf-8') as f_write:
+                f_write.write('\n'.join(latest_string))
                 f_write.close()
     
     except requests.exceptions.ConnectionError as e:
@@ -99,31 +113,31 @@ async def main_update(bot, chat_id, BASE_DIR: str, target: str, database_name: s
 
 def test_client_download(bot, chat_id, BASE_DIR: str, user_agent: UserAgent) -> None:
     # test_client_version.dat must be set to release version code. ex) 01097
-    version = 0
-    DB_FILE_NAME = 'test_client_version.dat'
+    version: str = None
+    DB_FILE_NAME: str = 'test_client_version.dat'
     with open(os.path.join(BASE_DIR, DB_FILE_NAME), 'r+') as f_read:
         version = f_read.readline()
         f_read.close()
 
-    URL = 'http://maplestory.dn.nexoncdn.co.kr/PatchT/'
+    URL: str = 'http://maplestory.dn.nexoncdn.co.kr/PatchT/'
     
     # Release Version
-    str_version = version
-    version = concat_all('0', str(int(version) + 1))
+    str_version: str = version
+    version: str = concat_all('0', str(int(version) + 1))
 
     # Test Beta Version
-    str_version_2 = version
-    version = concat_all('0', str(int(version) - 1))
+    str_version_2: str = version
+    version: str = concat_all('0', str(int(version) - 1))
 
-    final_url = concat_all(URL, str_version_2, '/', str_version, 'to', str_version_2, '.patch')
-    file_path = concat_all('./patch/', final_url.split('/')[-1])
+    final_url: str = concat_all(URL, str_version_2, '/', str_version, 'to', str_version_2, '.patch')
+    file_name: str = final_url.split('/')[-1]
 
     headers = randomize_header(user_agent)
 
     # File Download
     try:
         with requests.get(final_url, stream=True, headers=headers) as response:
-            with open(file_path, 'wb') as f :
+            with open(os.path.join(BASE_DIR, 'patch', file_name), 'wb+') as f :
                 shutil.copyfileobj(response.raw, f)
                 
             # print(concat_all(final_url, ', ', str(response.status_code)))
@@ -132,8 +146,8 @@ def test_client_download(bot, chat_id, BASE_DIR: str, user_agent: UserAgent) -> 
             if response.status_code == 200:
                 now = get_time()
                 PUSH_TEXT = '테섭 업데이트가 존재합니다.\n'
-                patch_file = os.path.getsize(file_path)
-                message = concat_all(PUSH_TEXT, now, '\n', file_path.split('/')[-1], ', 용량 : ', str(round(patch_file/1024/1024, 2)), 'MB')
+                patch_file = os.path.getsize(os.path.join(BASE_DIR, 'patch', file_name))
+                message = concat_all(PUSH_TEXT, now, '\n', final_url.split('/')[-1], ', 용량 : ', str(round(patch_file/1024/1024, 2)), 'MB')
                 
                 bot.sendMessage(chat_id=chat_id, text=message)
 
