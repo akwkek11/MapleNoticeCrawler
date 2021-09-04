@@ -59,12 +59,17 @@ async def main_update(bot, chat_id, BASE_DIR: str, target: str, database_name: s
         latest_link = posts[0].get('href')
 
         latest_string: list = None
+        first_check: bool = False
 
         # Read previous notice ( latest )
         too_long: bool = False
 
         with open(os.path.join(BASE_DIR, FILE_NAME), 'r+', encoding='utf-8') as f_read:
             before: list = f_read.read().splitlines()
+            
+            if len(before) == 0:
+                first_check = True
+
             if len(before) >= 20:
                 too_long = True
                 latest_string = before[len(before)-2:]
@@ -98,9 +103,11 @@ async def main_update(bot, chat_id, BASE_DIR: str, target: str, database_name: s
         # Modify to latest notice
         if is_new:
             with open(os.path.join(BASE_DIR, FILE_NAME), 'at', encoding='utf-8') as f_write:
-                f_write.write(concat_all('\n', latest))
+                written_string: str = latest if first_check else concat_all('\n', latest)
+                f_write.write(written_string)
                 f_write.close()
-                latest_string.append(latest)
+                if too_long:
+                    latest_string.append(latest)
         
         # Modify database
         if too_long:
