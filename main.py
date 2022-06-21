@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 
 from bs4 import BeautifulSoup
-from time import sleep
 from pytz import timezone, utc
 from fake_useragent import UserAgent
 
@@ -9,8 +8,8 @@ import datetime
 import os
 import requests
 import shutil
-import time
 import telegram
+import traceback
 import asyncio
 
 # String concatenation without '+' for the performance issue
@@ -45,15 +44,12 @@ def randomize_header(ua: UserAgent) -> UserAgent:
 async def main_update(bot, chat_id, BASE_DIR: str, target: str, database_name: str, push_name: str, user_agent: UserAgent, is_homepage: bool) -> None:
     FILE_NAME = database_name
     MAIN_URL = 'https://maplestory.nexon.com'
-
     url = concat_all(MAIN_URL, target)
-
     headers = randomize_header(user_agent)
     
     try:
         req = requests.get(url, headers=headers)
         req.encoding = 'utf-8'
-
         posts = crawling_main(req) if is_homepage else crawling(req)
         latest = posts[0].text.strip()
         latest_link = posts[0].get('href')
@@ -92,7 +88,6 @@ async def main_update(bot, chat_id, BASE_DIR: str, target: str, database_name: s
                 message = concat_all(push_name, PUSH_TEXT, now, '\n', '제목 : ', latest,'\n', MAIN_URL, latest_link)
                 
                 bot.sendMessage(chat_id=chat_id, text=message)
-            f_read.close()
 
             '''
             # for Debugging
@@ -105,7 +100,6 @@ async def main_update(bot, chat_id, BASE_DIR: str, target: str, database_name: s
             with open(os.path.join(BASE_DIR, FILE_NAME), 'at', encoding='utf-8') as f_write:
                 written_string: str = latest if first_check else concat_all('\n', latest)
                 f_write.write(written_string)
-                f_write.close()
                 if too_long:
                     latest_string.append(latest)
         
@@ -113,10 +107,9 @@ async def main_update(bot, chat_id, BASE_DIR: str, target: str, database_name: s
         if too_long:
             with open(os.path.join(BASE_DIR, FILE_NAME), 'wt', encoding='utf-8') as f_write:
                 f_write.write('\n'.join(latest_string))
-                f_write.close()
     
     except requests.exceptions.ConnectionError as e:
-        print("main_update error : Connection refused.")
+        print(traceback.format_exc())
 
 def test_client_download(bot, chat_id, BASE_DIR: str, user_agent: UserAgent) -> None:
     # test_client_version.dat must be set to release version code. ex) 01097
@@ -124,7 +117,6 @@ def test_client_download(bot, chat_id, BASE_DIR: str, user_agent: UserAgent) -> 
     DB_FILE_NAME: str = 'test_client_version.dat'
     with open(os.path.join(BASE_DIR, DB_FILE_NAME), 'r+') as f_read:
         version = f_read.readline()
-        f_read.close()
 
     URL: str = 'http://maplestory.dn.nexoncdn.co.kr/PatchT/'
     
@@ -161,10 +153,9 @@ def test_client_download(bot, chat_id, BASE_DIR: str, user_agent: UserAgent) -> 
                 # Modify Version
                 with open(os.path.join(BASE_DIR, DB_FILE_NAME), 'w+') as f_write:
                     f_write.write(str_version_2)
-                    f_write.close()
 
     except requests.exceptions.ConnectionError as e:
-        print("test_client_download error : Connection refused.")
+        print(traceback.format_exc())
 
 async def main():
     BASE_DIR: str = os.path.dirname(os.path.abspath(__file__))
@@ -184,8 +175,6 @@ async def main():
             chat_id = bot.getUpdates()[-1].message.chat.id
         except IndexError:
             chat_id = 0
-
-        f_read.close()
 
     # infinite loop
     while True:
@@ -214,7 +203,7 @@ async def main():
         test_client_download(bot, chat_id, BASE_DIR, ua)
 
         # iterate n seconds
-        await asyncio.sleep(3)
+        await asyncio.sleep(10)
 
 if __name__ == '__main__':
     asyncio.run(main())
